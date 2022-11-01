@@ -13,8 +13,6 @@
 #include<algorithm>
 #include<vector>
 
-
-
 static inline int argmax(const float *ptr, int len) {
     int max_arg = 0;
     for (int i = 1; i < len; i++) {
@@ -197,6 +195,9 @@ void TRTModule::Init(const std::string &strModelName) {
         network->unmarkOutput(*yolov5_output);
 
         IBuilderConfig* config = builder->createBuilderConfig();
+        //TODO:有的人电脑可能需要添加下面这句不然会报错
+        config->setMaxWorkspaceSize(1ULL<<30);
+
         //启用 FP16 精度推理
         if (builder->platformHasFastFp16()) {
             std::cout << "[INFO]: platform support fp16, enable fp16" << std::endl;
