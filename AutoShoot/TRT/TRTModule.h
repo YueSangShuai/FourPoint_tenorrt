@@ -39,7 +39,6 @@ private:
     bool exists(const std::string &name);
 
 private:
-
     nvinfer1::ICudaEngine *Engine;
     nvinfer1::IExecutionContext *Context;
     Logger gLogger;
@@ -52,7 +51,7 @@ private:
     cudaStream_t stream;
     float* output_buffer;
 private:
-
+    static constexpr int TOPK_NUM = 128;
 };
 
 #endif //FOURPOINT_TENSORRT_TRTMODULE_H

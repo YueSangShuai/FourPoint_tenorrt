@@ -62,7 +62,8 @@ TRTModule::TRTModule(const std::string &onnx_file) {
     Init(onnx_file);
 
     assert((input_Index = Engine->getBindingIndex("input")) == 0);
-    assert((output_Index = Engine->getBindingIndex("output")) == 1);
+    assert((output_Index = Engine->getBindingIndex("output-topk")) == 1);
+
     inputdims = Engine->getBindingDimensions(input_Index);
     std::cout << "[INFO]: input dims " << inputdims.d[0] << " " << inputdims.d[1] << " " << inputdims.d[2] << " " << inputdims.d[3] << std::endl;
     outpusdims = Engine->getBindingDimensions(output_Index);
@@ -105,6 +106,7 @@ std::vector<bbox_t> TRTModule::operator()(const cv::Mat &src,float conf_thres,fl
 
     for (int i = 0; i < outpusdims.d[1]; i++) {
         auto *box_buffer = output_buffer + i * outpusdims.d[2];  // 20->23
+
         if(box_buffer[4]<conf_thres) continue;
         if(removed[i]) continue;
 
@@ -116,6 +118,15 @@ std::vector<bbox_t> TRTModule::operator()(const cv::Mat &src,float conf_thres,fl
         for(int j=0;j<10;j++){
             temp_box.pts[j]=box_buffer[5+j];
         }
+
+        cv::Rect2f bbox1;
+        bbox1.x = reduce_min(temp_box.pts[0], temp_box.pts[2], temp_box.pts[4], temp_box.pts[6]);
+        bbox1.y = reduce_min(temp_box.pts[1], temp_box.pts[3], temp_box.pts[5], temp_box.pts[7]);
+        bbox1.width = reduce_max(temp_box.pts[0], temp_box.pts[2], temp_box.pts[4], temp_box.pts[6]) - bbox1.x;
+        bbox1.height = reduce_max(temp_box.pts[1], temp_box.pts[3], temp_box.pts[5], temp_box.pts[7]) - bbox1.y;
+
+        cv::rectangle(x,bbox1,cv::Scalar(0,0,255),1);
+
         temp_box.class_id= argmax(box_buffer+15,4);
         rst.emplace_back(temp_box);
         for(int j=i+1;j<outpusdims.d[1];j++){
@@ -131,6 +142,10 @@ std::vector<bbox_t> TRTModule::operator()(const cv::Mat &src,float conf_thres,fl
     }
     auto end = std::chrono::system_clock::now();
     std::cout << "[INFO]：Do All time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
+
+    cv::imshow("aaa",x);
+    cv::waitKey(0);
+
     return rst;
 }
 
@@ -152,13 +167,39 @@ void TRTModule::Init(const std::string &strModelName) {
         INetworkDefinition* network = builder->createNetworkV2(explicitBatch);
 
         nvonnxparser::IParser* parser = nvonnxparser::createParser(*network, gLogger);
-        parser->parseFromFile(strModelName.c_str(), static_cast<int>(ILogger::Severity::kWARNING));
+        //parser->parseFromFile(strModelName.c_str(), static_cast<int>(ILogger::Severity::kWARNING));
+
+        parser->parseFromFile(strModelName.c_str(), static_cast<int>(ILogger::Severity::kINFO));
+        auto yolov5_output = network->getOutput(0);
+        auto slice_layer = network->addSlice(*yolov5_output, Dims3{0, 0, 4}, Dims3{1, 25200, 1}, Dims3{1, 1, 1});
+        auto yolov5_conf = slice_layer->getOutput(0);
+
+        auto shuffle_layer = network->addShuffle(*yolov5_conf);
+        shuffle_layer->setReshapeDimensions(Dims2{1, 25200});
+        yolov5_conf = shuffle_layer->getOutput(0);
+
+        auto topk_layer = network->addTopK(*yolov5_conf, TopKOperation::kMAX, TOPK_NUM, 1 << 1);
+        auto topk_idx = topk_layer->getOutput(1);
+
+        auto gather_layer = network->addGather(*yolov5_output, *topk_idx, 1);
+        gather_layer->setNbElementWiseDims(1);
+
+        auto yolov5_output_topk = gather_layer->getOutput(0);
+        yolov5_output_topk->setName("output-topk");
+
+        network->getInput(0)->setName("input");
+        network->markOutput(*yolov5_output_topk);
+        network->unmarkOutput(*yolov5_output);
 
         IBuilderConfig* config = builder->createBuilderConfig();
-        config->setMaxWorkspaceSize(1ULL << 30);
-
         //启用 FP16 精度推理
-        config->setFlag(BuilderFlag::kFP16);
+        if (builder->platformHasFastFp16()) {
+            std::cout << "[INFO]: platform support fp16, enable fp16" << std::endl;
+            config->setFlag(BuilderFlag::kFP16);
+        } else {
+            std::cout << "[INFO]: platform do not support fp16, enable fp32" << std::endl;
+        }
+
 
         Engine = builder->buildEngineWithConfig(*network, *config);
         Context = Engine->createExecutionContext();
@@ -212,8 +253,8 @@ bool TRTModule::exists(const std::string &name) {
 cv::Mat TRTModule::doPicture(const cv::Mat &cInMat) const {
     cv::Mat x;
     cInMat.copyTo(x);
-    //cv::cvtColor(cInMat, x, cv::COLOR_BGR2RGB);
-    float fx = (float) cInMat.cols / inputdims.d[2], fy = (float) cInMat.rows / inputdims.d[3];
+//    cv::cvtColor(cInMat, x, cv::COLOR_BGR2RGB);
+//    float fx = (float) cInMat.cols / inputdims.d[2], fy = (float) cInMat.rows / inputdims.d[3];
 
     if (cInMat.cols != inputdims.d[2] || cInMat.rows != inputdims.d[3]) {
         cv::resize(x, x, {inputdims.d[2], inputdims.d[3]},cv::INTER_AREA);
