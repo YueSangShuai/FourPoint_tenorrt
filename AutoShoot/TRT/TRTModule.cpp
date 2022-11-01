@@ -94,6 +94,7 @@ TRTModule::~TRTModule() {
 }
 
 std::vector<bbox_t> TRTModule::operator()(const cv::Mat &src,float conf_thres,float iou_thres) const{
+    auto start = std::chrono::system_clock::now();
     cv::Mat x= doPicture(src);
     doInference();
     std::vector<bbox_t> rst;
@@ -128,6 +129,8 @@ std::vector<bbox_t> TRTModule::operator()(const cv::Mat &src,float conf_thres,fl
             if(iou(temp_box.pts,temppoint)>iou_thres) removed[j] = true;
         }
     }
+    auto end = std::chrono::system_clock::now();
+    std::cout << "[INFO]：Do All time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
     return rst;
 }
 
@@ -208,7 +211,8 @@ bool TRTModule::exists(const std::string &name) {
 
 cv::Mat TRTModule::doPicture(const cv::Mat &cInMat) const {
     cv::Mat x;
-    cv::cvtColor(cInMat, x, cv::COLOR_BGR2RGB);
+    cInMat.copyTo(x);
+    //cv::cvtColor(cInMat, x, cv::COLOR_BGR2RGB);
     float fx = (float) cInMat.cols / inputdims.d[2], fy = (float) cInMat.rows / inputdims.d[3];
 
     if (cInMat.cols != inputdims.d[2] || cInMat.rows != inputdims.d[3]) {

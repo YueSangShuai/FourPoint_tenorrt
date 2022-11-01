@@ -9,7 +9,7 @@ int main(){
     TRTModule model("../AutoShoot/model/best32.onnx");
     auto temp1=model(temp);
 
-    std::cout<<temp1.size()<<std::endl;
+
 
 //    cv::Mat frame;
 //    cv::VideoCapture capture = cv::VideoCapture("/media/yuesang/G/Robotmaster/dataset/video/video/1.mp4");

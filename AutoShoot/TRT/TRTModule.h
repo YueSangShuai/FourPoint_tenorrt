@@ -12,6 +12,9 @@ struct alignas(float)  bbox_t {
     float conf; //置信度
     float pts[10]; // 四个点坐标
     float class_id;//类别
+
+    bool operator==(const bbox_t&) const = default;
+    bool operator!=(const bbox_t&) const = default;
 };
 
 class TRTModule {
