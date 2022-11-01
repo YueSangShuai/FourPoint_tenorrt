@@ -52,6 +52,7 @@ private:
     float* output_buffer;
 private:
     static constexpr int TOPK_NUM = 128;
+
 };
 
 #endif //FOURPOINT_TENSORRT_TRTMODULE_H

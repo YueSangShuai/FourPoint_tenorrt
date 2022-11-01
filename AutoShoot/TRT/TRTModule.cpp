@@ -13,6 +13,8 @@
 #include<algorithm>
 #include<vector>
 
+
+
 static inline int argmax(const float *ptr, int len) {
     int max_arg = 0;
     for (int i = 1; i < len; i++) {
@@ -62,7 +64,9 @@ TRTModule::TRTModule(const std::string &onnx_file) {
     Init(onnx_file);
 
     assert((input_Index = Engine->getBindingIndex("input")) == 0);
+//    assert((output_Index = Engine->getBindingIndex("output")) == 1);
     assert((output_Index = Engine->getBindingIndex("output-topk")) == 1);
+
 
     inputdims = Engine->getBindingDimensions(input_Index);
     std::cout << "[INFO]: input dims " << inputdims.d[0] << " " << inputdims.d[1] << " " << inputdims.d[2] << " " << inputdims.d[3] << std::endl;
@@ -95,7 +99,7 @@ TRTModule::~TRTModule() {
 }
 
 std::vector<bbox_t> TRTModule::operator()(const cv::Mat &src,float conf_thres,float iou_thres) const{
-    auto start = std::chrono::system_clock::now();
+    //auto start = std::chrono::system_clock::now();
     cv::Mat x= doPicture(src);
     doInference();
     std::vector<bbox_t> rst;
@@ -140,11 +144,12 @@ std::vector<bbox_t> TRTModule::operator()(const cv::Mat &src,float conf_thres,fl
             if(iou(temp_box.pts,temppoint)>iou_thres) removed[j] = true;
         }
     }
-    auto end = std::chrono::system_clock::now();
-    std::cout << "[INFO]：Do All time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
+    //auto end = std::chrono::system_clock::now();
+    //std::cout << "[INFO]：Do All time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
+
 
     cv::imshow("aaa",x);
-    cv::waitKey(0);
+    cv::waitKey(1);
 
     return rst;
 }
@@ -167,7 +172,7 @@ void TRTModule::Init(const std::string &strModelName) {
         INetworkDefinition* network = builder->createNetworkV2(explicitBatch);
 
         nvonnxparser::IParser* parser = nvonnxparser::createParser(*network, gLogger);
-        //parser->parseFromFile(strModelName.c_str(), static_cast<int>(ILogger::Severity::kWARNING));
+//        parser->parseFromFile(strModelName.c_str(), static_cast<int>(ILogger::Severity::kWARNING));
 
         parser->parseFromFile(strModelName.c_str(), static_cast<int>(ILogger::Severity::kINFO));
         auto yolov5_output = network->getOutput(0);
@@ -267,13 +272,13 @@ cv::Mat TRTModule::doPicture(const cv::Mat &cInMat) const {
 
 void TRTModule::doInference() const {
     //inference
-    auto start = std::chrono::system_clock::now();
+    //auto start = std::chrono::system_clock::now();
     cudaMemcpyAsync(device_buffer[input_Index], host_buffer[input_Index], inputdims.d[0]*inputdims.d[1]*inputdims.d[2]*inputdims.d[3] * sizeof(float), cudaMemcpyHostToDevice, stream);
     Context->enqueueV2(device_buffer, stream, nullptr);
     cudaMemcpyAsync(output_buffer, device_buffer[output_Index], outpusdims.d[0]*outpusdims.d[1]*outpusdims.d[2] * sizeof(float), cudaMemcpyDeviceToHost,stream);
     cudaStreamSynchronize(stream);
     auto end = std::chrono::system_clock::now();
-    std::cout << "[INFO]: inference time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
+    //std::cout << "[INFO]: inference time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
 }
 
 
