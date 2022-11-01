@@ -25,7 +25,7 @@ public:
 
     TRTModule(const TRTModule &) = delete;
 
-    std::vector<bbox_t> operator()(const cv::Mat &src,float conf_thres=0.5,float iou_thres=0.5) const;
+    std::vector<bbox_t> operator()(const cv::Mat &src,float conf_thres=0.5,float iou_thres=0.4) const;
 
 
 
