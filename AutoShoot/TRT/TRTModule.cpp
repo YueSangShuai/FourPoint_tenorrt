@@ -109,7 +109,7 @@ std::vector<bbox_t> TRTModule::operator()(const cv::Mat &src,float conf_thres,fl
     for (int i = 0; i < outpusdims.d[1]; i++) {
         auto *box_buffer = output_buffer + i * outpusdims.d[2];  // 20->23
 
-        if(box_buffer[4]<conf_thres) continue;
+        if(box_buffer[4]<conf_thres) break;
         if(removed[i]) continue;
 
         bbox_t temp_box;
@@ -133,7 +133,7 @@ std::vector<bbox_t> TRTModule::operator()(const cv::Mat &src,float conf_thres,fl
         rst.emplace_back(temp_box);
         for(int j=i+1;j<outpusdims.d[1];j++){
             auto *box_buffer2 = output_buffer + j * outpusdims.d[2];  // 20->23
-            if(box_buffer2[4]<conf_thres) continue;
+            if(box_buffer2[4]<conf_thres) break;
             if(removed[j]) continue;
             float temppoint[10];
             for(int k=0;k<10;k++){
