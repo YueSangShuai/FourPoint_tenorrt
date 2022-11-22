@@ -12,6 +12,7 @@
 #include <fmt/color.h>
 #include<algorithm>
 #include<vector>
+#include<string.h>
 
 static inline int argmax(const float *ptr, int len) {
     int max_arg = 0;
@@ -72,8 +73,8 @@ TRTModule::TRTModule(const std::string &onnx_file) {
     std::cout << "[INFO]: output dims "<< outpusdims.d[0] << " " << outpusdims.d[1] << " " << outpusdims.d[2] << std::endl;
 
     cudaMalloc(&device_buffer[input_Index], inputdims.d[0]*inputdims.d[1]*inputdims.d[2]*inputdims.d[3] * sizeof(float));
-    host_buffer[input_Index]=malloc(inputdims.d[0]*inputdims.d[1]*inputdims.d[2]*inputdims.d[3] * sizeof(float));
 
+    host_buffer[input_Index]=malloc(inputdims.d[0]*inputdims.d[1]*inputdims.d[2]*inputdims.d[3] * sizeof(float));
     InputWrappers.emplace_back(inputdims.d[2], inputdims.d[3], CV_32FC1, host_buffer[input_Index]);
     InputWrappers.emplace_back(inputdims.d[2], inputdims.d[3], CV_32FC1, host_buffer[input_Index] + sizeof(float) * inputdims.d[2] * inputdims.d[3] );
     InputWrappers.emplace_back(inputdims.d[2], inputdims.d[3], CV_32FC1, host_buffer[input_Index] + 2 * sizeof(float) * inputdims.d[2] * inputdims.d[3]);
@@ -83,6 +84,7 @@ TRTModule::TRTModule(const std::string &onnx_file) {
 
     cudaStreamCreate(&stream);
     output_buffer = new float[outpusdims.d[0]*outpusdims.d[1]*outpusdims.d[2]];
+
     assert(output_buffer != nullptr);
 
 }
@@ -97,22 +99,27 @@ TRTModule::~TRTModule() {
 }
 
 std::vector<bbox_t> TRTModule::operator()(const cv::Mat &src,float conf_thres,float iou_thres) const{
-    //auto start = std::chrono::system_clock::now();
+//    auto start = std::chrono::system_clock::now();
+
     cv::Mat x= doPicture(src);
     doInference();
+
+
     std::vector<bbox_t> rst;
     int nc=outpusdims.d[2]-15;
 
     rst.reserve(outpusdims.d[1]);
     std::vector<uint8_t> removed(outpusdims.d[1]);
 
+
     for (int i = 0; i < outpusdims.d[1]; i++) {
-        auto *box_buffer = output_buffer + i * outpusdims.d[2];  // 20->23
+        auto *box_buffer = output_buffer + i * outpusdims.d[2];
 
         if(box_buffer[4]<conf_thres) break;
         if(removed[i]) continue;
 
         bbox_t temp_box;
+
         for(int j=0;j<4;j++){
             temp_box.rect[j]=box_buffer[j];
         }
@@ -142,11 +149,10 @@ std::vector<bbox_t> TRTModule::operator()(const cv::Mat &src,float conf_thres,fl
             if(iou(temp_box.pts,temppoint)>iou_thres) removed[j] = true;
         }
     }
-    //auto end = std::chrono::system_clock::now();
-    //std::cout << "[INFO]：Do All time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
 
 
-    cv::imshow("aaa",x);
+
+    cv::imshow("aaa", x);
     cv::waitKey(1);
 
     return rst;
@@ -257,17 +263,21 @@ bool TRTModule::exists(const std::string &name) {
 }
 
 cv::Mat TRTModule::doPicture(const cv::Mat &cInMat) const {
-    cv::Mat x;
-    cInMat.copyTo(x);
-//    cv::cvtColor(cInMat, x, cv::COLOR_BGR2RGB);
-//    float fx = (float) cInMat.cols / inputdims.d[2], fy = (float) cInMat.rows / inputdims.d[3];
 
+    cv::Mat x=cInMat.clone();
+
+    auto start = std::chrono::system_clock::now();
     if (cInMat.cols != inputdims.d[2] || cInMat.rows != inputdims.d[3]) {
         cv::resize(x, x, {inputdims.d[2], inputdims.d[3]},cv::INTER_AREA);
     }
 
     x.convertTo(x, CV_32FC3,1.0/255);
+
+
     cv::split(x,InputWrappers);
+
+    auto end = std::chrono::system_clock::now();
+    std::cout << "[INFO]: Picture time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
     return x;
 }
 
@@ -278,23 +288,6 @@ void TRTModule::doInference() const {
     Context->enqueueV2(device_buffer, stream, nullptr);
     cudaMemcpyAsync(output_buffer, device_buffer[output_Index], outpusdims.d[0]*outpusdims.d[1]*outpusdims.d[2] * sizeof(float), cudaMemcpyDeviceToHost,stream);
     cudaStreamSynchronize(stream);
-    auto end = std::chrono::system_clock::now();
+//    auto end = std::chrono::system_clock::now();
     //std::cout << "[INFO]: inference time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
